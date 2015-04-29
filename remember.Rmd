@@ -1,0 +1,93 @@
+---
+title: "Things I want to remember"
+output: html_document
+---
+```{r basic-setup, echo=FALSE, message=FALSE}
+library(data.table)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+set.seed(1211456)
+randomAnswer <- function(inCount){
+  sapply(1:inCount, function(x){
+    temp <- runif(1)
+    if (temp <= .6){return("Unknown")}
+    if (temp <= .85){return("Yes")}
+    return("No")
+  }) 
+}
+
+randomState <- function(inCount){
+  sapply(1:inCount, function(x){
+    temp <- runif(1)
+    if (temp <= .4){return("CA")}
+    if (temp <= .7){return("MN")}
+    if (temp <= .9){return("FL")}
+    return("Unknown")
+  }) 
+}
+
+polling <- data.frame(state=randomState(1000), answer=randomAnswer(1000))
+```
+# Enriching a vector
+Sometimes I have a vector of things that I want to do some enrichment of everything in that vector and get the results as a `data.frame`. Here are a couple
+approaches to make that happen.
+```{r}
+myList <- c("Kevin","Bob","Gabe","Jay","Suzanne","Marc","Dave","Bhaskar")
+enriched <- ldply(myList, function(x){c(x,tolower(x),nchar(x))})
+enriched %>% head()
+```
+That works, but it also requires you to use plyr which we would like to avoid because of the namespace collisions with dplyr. So here's a way to do it using
+data.table. Bob Rudis says this will be fast and use less memory also.
+```{r}
+enriched <- rbindlist(lapply(myList, function(x) {data.frame(x, tolower(x), nchar(x))}))
+enriched %>% head()
+```
+
+# Grouping and aggregation
+Let's say we have a data table of observations over mutiple states and we would like to get a summary of each state. This is a split, apply, combine problem that
+we've seen dozens of times. But `dplyr` makes it really easy with the `group_by` function. `Group_by` doesn't seem to change the look of the data, but it makes
+it so that all of the summary functions you run on the data will apply to the individual groups rather than the whole table.
+```{r}
+polling %>% head()
+
+polling %>% 
+  arrange(state, answer) %>% # sorts the frame. Unnecessary but nice to look at
+  group_by(state) %>% # invisible grouping of each state
+  mutate(n=n()) %>%  # adds a count of how man instances of that state were seen
+  ungroup %>%  # remove the invisible grouping
+  group_by(state, answer) %>%  # invisible grouping of each combination of state and answer
+  mutate(n1=n(), pct=n1/n) %>%  # adds a count of how many instances of that state/answer combo were seen
+  distinct %>% # remove the duplicates
+  head # don't show everything
+```
+
+# adding and reshaping
+To get a count of fall the true values in several columns you can use the built-in `colSums()`. However that returns a list so you can use `data.frame(colSums(x))` to get it back to a dataframe. But, then you've got values where you used to have row names.
+
+```{r}
+moveit <- data.frame(matrix(runif(200) > .6, ncol=10))
+moveit <- data.frame(colSums(moveit))
+moveit$variable <- rownames(moveit)
+rownames(moveit) <- NULL
+```
+
+Sometimes I have data in two columns and I want to be able to plot it. ggplot wants this to be long data which we can convert using tidyr. Think about `gather()` like this: create a new dataframe with a column called "first name" and a column called "second name" but dont include "third name" in the calculation. 
+
+```{r}
+moveit <- data.frame(variable=c("a","b","c","d"), observed=c(1,1,1,1), expected=c(2,2,2,2))
+moveit <- moveit %>% gather(type, number, -variable)
+
+plt <- ggplot(moveit, aes(x=variable, y=number)) + geom_bar(stat="identity", position="dodge", aes(fill=type))
+print(plt)
+```
+
+# versions of software
+dtupdate
+
+
+# corrgrams
+library(corrgram)
+corrgram(predictors, order=NULL, lower.panel=panel.shade, upper.panel=NULL, text.panel=panel.txt)
